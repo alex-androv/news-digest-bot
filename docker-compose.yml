@@ -1,0 +1,49 @@
+services:
+
+  mcp-news:
+    build:
+      context: ./mcp-news
+    image: mcp-news:latest
+    container_name: mcp-news
+    restart: unless-stopped
+    environment:
+      HTTP_PORT: "3000"
+    expose:
+      - "3000"
+    networks:
+      - agent-net
+
+  hermes-agent:
+    build:
+      context: ./hermes-agent   # клонируется на шаге 2 быстрого старта
+    image: hermes-agent:latest
+    container_name: hermes-agent
+    restart: unless-stopped
+    depends_on:
+      - mcp-news
+    environment:
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
+      GROQ_API_KEY: "${GROQ_API_KEY}"
+      TELEGRAM_TOKEN: "${TELEGRAM_TOKEN}"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_TOKEN}"
+      GATEWAY_ALLOW_ALL_USERS: "true"
+      HERMES_DATA_DIR: "/opt/data"
+    volumes:
+      # Персистентное хранилище: память агента, созданные им skills, состояние
+      - hermes-data:/opt/data
+      # Наш конфиг — без :ro, чтобы Hermes мог мигрировать схему
+      - ./hermes-config/config.yaml:/opt/data/config.yaml
+      # Только наш skill news-digest, не весь каталог
+      - ./skills/news-digest:/opt/data/skills/news-digest
+    networks:
+      - agent-net
+    command: ["gateway", "run"]
+
+networks:
+  agent-net:
+    driver: bridge
+
+volumes:
+  # Персистентность: переживает docker compose down / up
+  # Хранит память Hermes, историю диалогов, агентские skills
+  hermes-data:

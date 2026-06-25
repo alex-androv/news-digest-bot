@@ -1,0 +1,19 @@
+{
+  "name": "mcp-news",
+  "version": "1.0.0",
+  "description": "MCP-сервер для поиска и загрузки статей с Хабра",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start:http": "HTTP_PORT=3000 node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

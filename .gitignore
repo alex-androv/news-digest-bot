@@ -1,0 +1,8 @@
+# Секреты — никогда не коммитить
+.env
+
+# Hermes Agent — большой внешний репозиторий (~400MB), клонируется отдельно (см. README шаг 2)
+hermes-agent/
+
+# Зависимости Node.js
+mcp-news/node_modules/
