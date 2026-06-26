@@ -6,8 +6,8 @@ providers: {}
 fallback_providers: []
 credential_pool_strategies: {}
 toolsets:
-- hermes-cli
-max_concurrent_sessions: null
+  - hermes-cli
+max_concurrent_sessions:
 agent:
   max_turns: 90
   gateway_timeout: 1800
@@ -27,15 +27,15 @@ agent:
   gateway_auto_continue_freshness: 3600
   image_input_mode: auto
   disabled_toolsets:
-  - browser
-  - terminal
-  - code_execution
-  - web
-  - computer_use
-  - vision
-  - image_gen
-  - tts
-  - delegation
+    - browser
+    - terminal
+    - code_execution
+    - web
+    - computer_use
+    - vision
+    - image_gen
+    - tts
+    - delegation
 terminal:
   backend: local
   modal_mode: auto
@@ -91,7 +91,7 @@ checkpoints:
   retention_days: 7
   delete_orphans: true
   min_interval_hours: 24
-context_file_max_chars: null
+context_file_max_chars:
 file_read_max_chars: 100000
 mcp_discovery_timeout: 1.5
 tool_output:
@@ -127,7 +127,7 @@ kanban:
   worker_log_backup_count: 1
   orchestrator_profile: ''
   default_assignee: ''
-  max_in_progress_per_profile: null
+  max_in_progress_per_profile:
   auto_decompose: true
   auto_decompose_per_tick: 3
   dispatch_stale_timeout_seconds: 14400
@@ -299,9 +299,9 @@ display:
   runtime_footer:
     enabled: false
     fields:
-    - model
-    - context_pct
-    - cwd
+      - model
+      - context_pct
+      - cwd
   copy_shortcut: auto
   pet:
     enabled: false
@@ -456,11 +456,11 @@ discord:
     speech_gain: 1.0
     ack_enabled: true
     ack_phrases:
-    - Let me look into that.
-    - One moment.
-    - Checking on that now.
-    - Give me a sec.
-    - On it.
+      - Let me look into that.
+      - One moment.
+      - Checking on that now.
+      - Give me a sec.
+      - On it.
 whatsapp: {}
 telegram:
   reactions: false
@@ -483,7 +483,7 @@ approvals:
   timeout: 60
   cron_mode: deny
   mcp_reload_confirm: true
-  destructive_slash_confirm: true
+  destructive_slash_confirm: false
 command_allowlist: []
 quick_commands: {}
 platform_hints: {}
@@ -512,7 +512,7 @@ cron:
     nas_jwks_url: ''
   wrap_response: true
   mirror_delivery: false
-  max_parallel_jobs: null
+  max_parallel_jobs:
 code_execution:
   mode: project
 tools:
@@ -560,6 +560,7 @@ sessions:
 onboarding:
   seen:
     profile_build_offered: true
+    busy_input_prompt: true
   profile_build: ask
 updates:
   pre_update_backup: true
