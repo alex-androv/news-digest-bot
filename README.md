@@ -10,7 +10,7 @@ Telegram-бот на базе [Hermes Agent](https://github.com/NousResearch/her
 > «собери дайджест по теме Python за последнюю неделю»
 
 Бот:
-1. Ищет статьи на Хабре через `search_habr` (RSS-лента хаба или поиск)
+1. Ищет статьи на Хабре через `search_habr` (неофициальный API с пагинацией для известных хабов, RSS-поиск для произвольных запросов)
 2. Загружает полный текст каждой через `fetch_article`
 3. Аннотирует каждую статью (TL;DR 2–4 предложения)
 4. Собирает связную обзорную статью с вводкой и выводом
@@ -37,15 +37,7 @@ Telegram-бот на базе [Hermes Agent](https://github.com/NousResearch/her
 - **Telegram:** [@BotFather](https://t.me/BotFather) → `/newbot` → скопируй токен
 - **OpenRouter:** [openrouter.ai/keys](https://openrouter.ai/keys) → создай ключ (бесплатно)
 
-### 2. Клонируй Hermes Agent
-
-> **Важно для Windows:** флаг `--config core.autocrlf=false` обязателен. Без него s6-overlay в Docker упадёт из-за CRLF-окончаний.
-
-```bash
-git clone --config core.autocrlf=false https://github.com/NousResearch/hermes-agent.git hermes-agent
-```
-
-### 3. Настрой `.env`
+### 2. Настрой `.env`
 
 ```bash
 cp .env.example .env
@@ -58,13 +50,13 @@ TELEGRAM_TOKEN=123456789:ABC-ваш-токен
 OPENROUTER_API_KEY=sk-or-ваш-ключ
 ```
 
-### 4. Запусти
+### 3. Запусти
 
 ```bash
 docker compose up --build
 ```
 
-При первом запуске Docker соберёт образы (~5–10 минут, Hermes собирается из исходников).  
+При первом запуске Docker скачает образ `nousresearch/hermes-agent:latest` (~1–2 минуты в зависимости от интернета) и соберёт `mcp-news`.  
 При последующих запусках — `docker compose up` (без `--build`).
 
 ### 5. Напиши боту в Telegram
@@ -81,7 +73,6 @@ docker compose up --build
 
 ```
 news_digest_bot/
-├── hermes-agent/          # git clone NousResearch/hermes-agent (шаг 2)
 ├── mcp-news/
 │   ├── index.js           # MCP-сервер: search_habr + fetch_article
 │   ├── package.json
@@ -113,7 +104,7 @@ Docker: hermes-agent + mcp-news в общей сети agent-net
 
 ### Разделение ответственности
 
-- **MCP** = «руки»: знает как достать данные с Хабра (RSS хаба / поиск + fetch)
+- **MCP** = «руки»: знает как достать данные с Хабра (неофициальный API / RSS-поиск + fetch)
 - **Skill** = «привычка»: знает как из данных собрать статью (структура, тон, дедупликация)
 - **Hermes** = «голова»: оркестрирует вызовы инструментов, отвечает в Telegram
 

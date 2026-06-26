@@ -6,8 +6,8 @@ providers: {}
 fallback_providers: []
 credential_pool_strategies: {}
 toolsets:
-  - hermes-cli
-max_concurrent_sessions:
+- hermes-cli
+max_concurrent_sessions: null
 agent:
   max_turns: 90
   gateway_timeout: 1800
@@ -20,13 +20,22 @@ agent:
   environment_probe: true
   environment_hint: ''
   coding_context: auto
+  verify_on_stop: true
   gateway_timeout_warning: 900
   clarify_timeout: 600
   gateway_notify_interval: 180
   gateway_auto_continue_freshness: 3600
   image_input_mode: auto
-  disabled_toolsets: [browser, terminal, code_execution, web, computer_use,
-        vision, image_gen, tts, delegation]
+  disabled_toolsets:
+  - browser
+  - terminal
+  - code_execution
+  - web
+  - computer_use
+  - vision
+  - image_gen
+  - tts
+  - delegation
 terminal:
   backend: local
   modal_mode: auto
@@ -82,7 +91,7 @@ checkpoints:
   retention_days: 7
   delete_orphans: true
   min_interval_hours: 24
-context_file_max_chars:
+context_file_max_chars: null
 file_read_max_chars: 100000
 mcp_discovery_timeout: 1.5
 tool_output:
@@ -118,7 +127,7 @@ kanban:
   worker_log_backup_count: 1
   orchestrator_profile: ''
   default_assignee: ''
-  max_in_progress_per_profile:
+  max_in_progress_per_profile: null
   auto_decompose: true
   auto_decompose_per_tick: 3
   dispatch_stale_timeout_seconds: 14400
@@ -290,9 +299,9 @@ display:
   runtime_footer:
     enabled: false
     fields:
-      - model
-      - context_pct
-      - cwd
+    - model
+    - context_pct
+    - cwd
   copy_shortcut: auto
   pet:
     enabled: false
@@ -381,7 +390,6 @@ memory:
   memory_char_limit: 2200
   user_char_limit: 1375
   provider: ''
-  enabled: true
 delegation:
   model: ''
   provider: ''
@@ -401,8 +409,7 @@ prefill_messages_file: ''
 goals:
   max_turns: 20
 skills:
-  external_dirs:
-    - /opt/data/skills
+  external_dirs: []
   template_vars: true
   inline_shell: false
   inline_shell_timeout: 10
@@ -449,11 +456,11 @@ discord:
     speech_gain: 1.0
     ack_enabled: true
     ack_phrases:
-      - Let me look into that.
-      - One moment.
-      - Checking on that now.
-      - Give me a sec.
-      - On it.
+    - Let me look into that.
+    - One moment.
+    - Checking on that now.
+    - Give me a sec.
+    - On it.
 whatsapp: {}
 telegram:
   reactions: false
@@ -461,7 +468,7 @@ telegram:
   allowed_chats: ''
   extra:
     rich_messages: false
-  token: ${TELEGRAM_TOKEN}
+    rich_drafts: false
 mattermost:
   require_mention: true
   free_response_channels: ''
@@ -476,7 +483,7 @@ approvals:
   timeout: 60
   cron_mode: deny
   mcp_reload_confirm: true
-  destructive_slash_confirm: false
+  destructive_slash_confirm: true
 command_allowlist: []
 quick_commands: {}
 platform_hints: {}
@@ -504,7 +511,8 @@ cron:
     expected_audience: ''
     nas_jwks_url: ''
   wrap_response: true
-  max_parallel_jobs:
+  mirror_delivery: false
+  max_parallel_jobs: null
 code_execution:
   mode: project
 tools:
@@ -525,6 +533,8 @@ model_catalog:
 network:
   force_ipv4: false
 gateway:
+  scale_to_zero:
+    idle_timeout_minutes: 5
   message_timestamps:
     enabled: false
   max_inbound_media_bytes: 134217728

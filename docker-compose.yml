@@ -14,9 +14,7 @@ services:
       - agent-net
 
   hermes-agent:
-    build:
-      context: ./hermes-agent   # клонируется на шаге 2 быстрого старта
-    image: hermes-agent:latest
+    image: nousresearch/hermes-agent:latest
     container_name: hermes-agent
     restart: unless-stopped
     depends_on:

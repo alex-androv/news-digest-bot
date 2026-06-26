@@ -32,12 +32,11 @@ function parsePeriod(period = "7d") {
 const REQUEST_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  Accept:
-    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  Accept: "application/json, text/html, */*",
   "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
 };
 
-// Маппинг запросов к именам хабов Хабра — возвращает статьи строго по теме
+// Маппинг популярных запросов к именам хабов Хабра
 const HABR_HUB_MAP = {
   "python": "python",
   "питон": "python",
@@ -81,21 +80,92 @@ function getHubName(query) {
   return HABR_HUB_MAP[query.trim().toLowerCase()] || null;
 }
 
-// Ищет статьи на Хабре: для известных хабов — через RSS хаба (только релевантные статьи),
-// для остальных — через RSS поиска
-async function searchHabr(query, period = "7d", limit = 10) {
-  const since = parsePeriod(period);
-  const safeLimit = Math.min(Math.max(1, Number(limit) || 10), 20);
+// Выбирает период для Habr API на основе даты отсечения.
+// API поддерживает: daily, weekly, monthly, yearly, alltime.
+// Мы используем monthly (до 30 дней) или yearly (до года), чтобы
+// перекрыть всю историю за запрошенный период с запасом.
+function apiPeriod(since) {
+  const diffDays = (Date.now() - since.getTime()) / 86400000;
+  if (diffDays <= 31) return "monthly";
+  return "yearly";
+}
 
-  const hubName = getHubName(query);
-  const rssUrl = hubName
-    ? `https://habr.com/ru/rss/hubs/${hubName}/articles/`
-    : `https://habr.com/ru/rss/search/?q=${encodeURIComponent(query)}&order_by=date&target_type=posts&hl=ru`;
+// Ищет статьи через неофициальный Habr API (/kek/v2/articles/).
+// Преимущество над RSS: поддерживает пагинацию — можно получить статьи
+// за любой период, не ограничиваясь последними 40 записями RSS.
+async function searchHabrAPI(hubName, since, safeLimit) {
+  const results = [];
+  let page = 1;
+  const perPage = 20;
+  const period = apiPeriod(since);
+  const MAX_PAGES = 10;
+
+  while (results.length < safeLimit && page <= MAX_PAGES) {
+    let res;
+    try {
+      res = await axios.get("https://habr.com/kek/v2/articles/", {
+        params: { hub: hubName, sort: "date", page, perPage, hl: "ru", fl: "ru", period },
+        headers: REQUEST_HEADERS,
+        timeout: 12000,
+      });
+    } catch (err) {
+      throw new Error(`Habr API error (page ${page}): ${err.message}`);
+    }
+
+    const ids = Object.values(res.data.publicationIds || {});
+    const refs = res.data.publicationRefs || {};
+    const pagesCount = res.data.pagesCount || 1;
+
+    if (ids.length === 0) break;
+
+    for (const id of ids) {
+      if (results.length >= safeLimit) break;
+      const a = refs[id];
+      if (!a) continue;
+
+      const publishedAt = a.timePublished ? new Date(a.timePublished) : null;
+      if (publishedAt && publishedAt < since) continue;
+
+      const title = (a.titleHtml || "").replace(/<[^>]*>/g, "").trim();
+      if (!title) continue;
+
+      const url = `https://habr.com/ru/articles/${id}/`;
+      const snippet = (a.leadData?.textHtml || "")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .substring(0, 300);
+
+      results.push({
+        title,
+        url,
+        published_at: publishedAt ? publishedAt.toISOString() : "",
+        source: "habr.com",
+        snippet,
+      });
+    }
+
+    if (page >= pagesCount) break;
+    page++;
+  }
+
+  return results;
+}
+
+// Запасной поиск через RSS — используется для произвольных запросов
+// (не совпадающих с именем хаба).
+async function searchHabrRSS(query, since, safeLimit) {
+  const rssUrl =
+    `https://habr.com/ru/rss/search/?` +
+    `q=${encodeURIComponent(query)}&order_by=date&target_type=posts&hl=ru`;
 
   let xml;
   try {
     const res = await axios.get(rssUrl, {
-      headers: REQUEST_HEADERS,
+      headers: {
+        ...REQUEST_HEADERS,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9",
+      },
       timeout: 12000,
     });
     xml = res.data;
@@ -111,18 +181,19 @@ async function searchHabr(query, period = "7d", limit = 10) {
     const $el = $(el);
 
     const title = $el.find("title").text().trim();
-    // guid с isPermaLink="true" содержит чистый URL без UTM
     const guid = $el.find("guid").text().trim();
     const url = guid.split("?")[0];
     const pubDateStr = $el.find("pubDate").text().trim();
     const publishedAt = pubDateStr ? new Date(pubDateStr) : null;
 
-    // Описание в RSS — HTML, вырезаем теги
     const rawDesc = $el.find("description").text().trim();
-    const snippet = rawDesc.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().substring(0, 300);
+    const snippet = rawDesc
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .substring(0, 300);
 
     if (!title || !url) return;
-
     if (!publishedAt || publishedAt >= since) {
       results.push({
         title,
@@ -137,6 +208,19 @@ async function searchHabr(query, period = "7d", limit = 10) {
   return results;
 }
 
+// Основная функция поиска: для известных хабов использует API (пагинация,
+// глубокая история), для произвольных запросов — RSS поиск.
+async function searchHabr(query, period = "7d", limit = 10) {
+  const since = parsePeriod(period);
+  const safeLimit = Math.min(Math.max(1, Number(limit) || 10), 20);
+
+  const hubName = getHubName(query);
+  if (hubName) {
+    return searchHabrAPI(hubName, since, safeLimit);
+  }
+  return searchHabrRSS(query, since, safeLimit);
+}
+
 // Загружает полный текст статьи с Хабра по URL
 async function fetchArticle(url) {
   if (!url.includes("habr.com")) {
@@ -146,7 +230,10 @@ async function fetchArticle(url) {
   let html;
   try {
     const res = await axios.get(url, {
-      headers: REQUEST_HEADERS,
+      headers: {
+        ...REQUEST_HEADERS,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9",
+      },
       timeout: 15000,
     });
     html = res.data;
@@ -160,8 +247,7 @@ async function fetchArticle(url) {
   const title =
     $("h1.tm-title, h1").first().text().trim() || "Без заголовка";
   const author =
-    $(".tm-user-info__username, .user-info__username").first().text().trim() ||
-    "";
+    $(".tm-user-info__username, .user-info__username").first().text().trim() || "";
   const dateStr =
     $("meta[property='article:published_time']").attr("content") ||
     $("time[itemprop='datePublished']").attr("datetime") ||
@@ -173,7 +259,6 @@ async function fetchArticle(url) {
   );
   bodyEl.find("script, style, .banner, .ads, nav, footer").remove();
 
-  // Собираем текст из абзацев для более чистого результата
   const paragraphs = [];
   bodyEl.find("p, h2, h3, li").each((_, el) => {
     const text = $(el).text().trim();
@@ -187,7 +272,7 @@ async function fetchArticle(url) {
 
   return {
     title,
-    text: text.substring(0, 12000), // Ограничиваем размер для LLM
+    text: text.substring(0, 12000),
     author,
     published_at: dateStr,
   };
@@ -200,6 +285,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: "search_habr",
       description:
         "Ищет статьи на Хабре (habr.com) по ключевому запросу за указанный период. " +
+        "Для известных тем (python, javascript, rust, docker и др.) использует хаб Хабра через официальный API — " +
+        "поддерживает пагинацию и возвращает статьи за любой период, не ограничиваясь RSS-окном. " +
+        "Для произвольных запросов использует RSS-поиск. " +
         "Возвращает список статей: заголовок, URL, дата публикации, источник, краткое описание. " +
         "Вызывай первым, чтобы найти релевантные материалы по теме дайджеста.",
       inputSchema: {
@@ -209,7 +297,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: "string",
             description:
               "Поисковый запрос — тема или ключевые слова " +
-              "(например: 'искусственный интеллект', 'Rust async', 'LLM 2024')",
+              "(например: 'python', 'Rust async', 'искусственный интеллект')",
           },
           period: {
             type: "string",
@@ -288,7 +376,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 const HTTP_PORT = process.env.HTTP_PORT;
 
 if (HTTP_PORT) {
-  // HTTP/SSE режим — когда сервер запущен в отдельном Docker-контейнере
   let SSEServerTransport;
   try {
     ({ SSEServerTransport } = await import("@modelcontextprotocol/sdk/server/sse.js"));
@@ -310,13 +397,11 @@ if (HTTP_PORT) {
       return res.end();
     }
 
-    // Health check для Docker — отвечает первым, до любой MCP-логики
     if (req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       return res.end(JSON.stringify({ status: "ok", server: "mcp-news" }));
     }
 
-    // SSE endpoint — Hermes подключается сюда
     if (req.method === "GET" && req.url === "/sse") {
       const transport = new SSEServerTransport("/messages", res);
       transports.set(transport.sessionId, transport);
@@ -327,7 +412,6 @@ if (HTTP_PORT) {
       return;
     }
 
-    // Messages endpoint — Hermes отправляет запросы сюда
     if (req.method === "POST" && req.url?.startsWith("/messages")) {
       const sessionId = new URL(req.url, "http://x").searchParams.get("sessionId");
       const transport = transports.get(sessionId);
@@ -357,7 +441,6 @@ if (HTTP_PORT) {
     );
   });
 } else {
-  // Stdio режим — для локального запуска без Docker
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
